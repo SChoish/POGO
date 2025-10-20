@@ -187,7 +187,7 @@ def load_checkpoint_into_AgentA(agentA, load_prefix: str):
 # ---------------------------
 def train_phase1(agentA, env_name, seed, replay_buffer, mean, std,
                  max_steps, eval_freq, save_model, file_name, ckpt_dir,
-                 split_ratio, start_step=0):
+                 phase_end_step, midpoint_step, start_step=0):
     eval_env = make_env(env_name, seed + 1234)
     best_eval = -np.inf
     eval_file = f"./results/{file_name}.npy"
@@ -196,11 +196,17 @@ def train_phase1(agentA, env_name, seed, replay_buffer, mean, std,
     else:
         evaluations = []
 
-    split_step = int(round(max_steps * split_ratio))
-    midpoint_saved = start_step >= split_step
+    phase_end = min(max_steps, int(phase_end_step))
+    midpoint_target = min(max_steps, int(midpoint_step)) if midpoint_step is not None else None
 
-    print(f"🚀 Phase-1 시작: {start_step} ~ {split_step-1} steps (POGO)")
-    for global_step in range(start_step, split_step):
+    if start_step >= phase_end:
+        print("ℹ️  Phase-1 스킵: 이미 목표 구간을 완료했습니다.")
+        return agentA
+
+    midpoint_saved = midpoint_target is None or start_step >= midpoint_target
+
+    print(f"🚀 Phase-1 시작: {start_step} ~ {phase_end-1} steps (POGO)")
+    for global_step in range(start_step, phase_end):
         metrics = agentA.train(replay_buffer, batch_size=256)
 
         if (global_step + 1) % eval_freq == 0:
@@ -214,18 +220,19 @@ def train_phase1(agentA, env_name, seed, replay_buffer, mean, std,
                     best_eval = d4rl_score
                     agentA.save(f"./models/{file_name}_best")
 
-        if not midpoint_saved and (global_step + 1) == split_step:
-            mid_name = f"{file_name}_mid_{global_step + 1}"
+        if not midpoint_saved and midpoint_target is not None and (global_step + 1) >= midpoint_target:
+            checkpoint_step = midpoint_target
+            mid_name = f"{file_name}_mid_{checkpoint_step}"
             save_checkpoint(
                 agentA,
                 ckpt_dir,
                 mid_name,
-                step=global_step + 1,
+                step=checkpoint_step,
                 phase="phase1",
                 extra_meta={
                     "file_name": file_name,
                     "max_timesteps": max_steps,
-                    "split_ratio": split_ratio,
+                    "split_ratio": midpoint_target / max_steps if max_steps else 0.0,
                     "env": env_name,
                     "seed": seed,
                 },
@@ -413,14 +420,14 @@ def main():
     resume_phase = resume_metadata.get("phase")
 
     # 스케줄
-    split_step = int(round(args.max_timesteps * args.split_ratio)) if args.two_step else args.max_timesteps
+    midpoint_step = min(args.max_timesteps, int(round(args.max_timesteps * args.split_ratio)))
+    phase1_target_step = midpoint_step if args.two_step else args.max_timesteps
 
     # Phase-1
-    phase1_ratio = args.split_ratio if args.two_step else 1.0
 
     if args.start_mode == "two_step_only":
         print("⏭️  Phase-1 스킵 (two_step_only 모드)")
-        phase1_end = resume_step if resume_step > 0 else split_step
+        phase1_end = resume_step if resume_step > 0 else midpoint_step
     elif args.start_mode == "load":
         if resume_step <= 0 and not resume_phase:
             print("⚠️  체크포인트 메타데이터가 없어 scratch와 동일하게 진행합니다.")
@@ -428,30 +435,33 @@ def main():
                 agentA, args.env, args.seed, rb, mean, std,
                 max_steps=args.max_timesteps, eval_freq=args.eval_freq,
                 save_model=args.save_model, file_name=file_name,
-                ckpt_dir=args.checkpoint_dir, split_ratio=phase1_ratio,
+                ckpt_dir=args.checkpoint_dir, phase_end_step=phase1_target_step,
+                midpoint_step=midpoint_step,
             )
-            phase1_end = split_step
-        elif resume_phase in (None, "phase1") and resume_step < split_step:
-            print(f"🔁 Phase-1 재개: step {resume_step} → {split_step}")
+            phase1_end = phase1_target_step
+        elif resume_phase in (None, "phase1") and resume_step < phase1_target_step:
+            print(f"🔁 Phase-1 재개: step {resume_step} → {phase1_target_step}")
             agentA = train_phase1(
                 agentA, args.env, args.seed, rb, mean, std,
                 max_steps=args.max_timesteps, eval_freq=args.eval_freq,
                 save_model=args.save_model, file_name=file_name,
-                ckpt_dir=args.checkpoint_dir, split_ratio=phase1_ratio,
+                ckpt_dir=args.checkpoint_dir, phase_end_step=phase1_target_step,
+                midpoint_step=midpoint_step,
                 start_step=resume_step,
             )
-            phase1_end = split_step
+            phase1_end = phase1_target_step
         else:
             print("⏭️  Phase-1 스킵 (체크포인트에서 이미 완료)")
-            phase1_end = max(resume_step, split_step)
+            phase1_end = max(resume_step, phase1_target_step)
     else:
         agentA = train_phase1(
             agentA, args.env, args.seed, rb, mean, std,
             max_steps=args.max_timesteps, eval_freq=args.eval_freq,
             save_model=args.save_model, file_name=file_name,
-            ckpt_dir=args.checkpoint_dir, split_ratio=phase1_ratio,
+            ckpt_dir=args.checkpoint_dir, phase_end_step=phase1_target_step,
+            midpoint_step=midpoint_step,
         )
-        phase1_end = split_step
+        phase1_end = phase1_target_step
 
     # Phase-2
     if args.two_step and phase1_end < args.max_timesteps:
