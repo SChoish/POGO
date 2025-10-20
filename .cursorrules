@@ -1,0 +1,88 @@
+# POGO_Sto 프로젝트 커서 룰
+
+## 환경 설정
+- 항상 conda offrl 환경을 활성화해야 함
+- Python 3.8+ 사용
+- GPU 환경 고려 (CUDA 사용 가능)
+- Geomloss 라이브러리 필수 (Sinkhorn 거리 계산용)
+
+## 알고리즘 이해
+### POGO (Policy Optimization by Gradient Flow on Offline RL)
+- **Transport Map**: Actor는 z ~ N(0,I)에서 행동 공간으로의 transport map T_s를 근사
+- **Gradient Flow**: JKO (Jordan-Kinderlehrer-Otto) 흐름을 통한 최적화
+- **Two-step Process**: 
+  1. Single-step: TD3+BC + W2 penalty (deterministic behavior policy)
+  2. Multi-step: Sinkhorn distance (complex policy distributions)
+
+### 핵심 수학적 개념
+- **JKO Proximal Energy**: L_actor = -λ * E[Q(s,a)] + w2_weight * W2(π_actor, π_behavior)
+  - 첫 번째 항: Potential energy (Q값 최대화)
+  - 두 번째 항: Proximal term (이전 분포와의 거리 페널티)
+- **JKO Scheme**: π_{k+1} = argmin_π [E_π[V] + (1/2τ) * W2(π, π_k)]
+- **Adaptive Regularization**: λ = α / |Q|_mean
+- **Distance Metrics**: L2 (simple) vs Sinkhorn (complex distributions)
+- **Critic Freezing**: 실험적 목적으로 critic 학습 중단 가능
+
+## 전문 분야
+- **강화학습**: Offline RL, TD3, Behavior Cloning
+- **최적 운송 이론**: Gradient Flow, JKO Scheme, Wasserstein Distance
+- **확률론**: Transport Maps, Optimal Transport Theory
+- **딥러닝**: Actor-Critic, Twin Delayed DDPG
+
+## 코딩 스타일
+- Python 코드는 PEP 8 스타일 가이드 준수
+- 함수와 클래스에는 docstring 작성 (수학적 배경 포함)
+- 변수명은 명확하고 의미있는 이름 사용
+- 복잡한 로직에는 수학적 주석 추가
+- Transport map 관련 변수는 z, T_s 등 수학적 표기법 사용
+
+## 프로젝트 구조
+```
+POGO_Sto/
+├── main.py                 # 메인 실행 스크립트 (Two-phase 학습)
+├── agent.py               # POGO, POGO_Refine 클래스 구현
+├── utils.py               # ReplayBuffer, D4RL 데이터 처리
+├── run_comparison.py      # 병렬 실험 실행기
+└── config.yaml            # 실험 설정
+```
+
+## 핵심 클래스 및 함수
+### POGO 클래스
+- `__init__()`: Transport map 기반 Actor, Twin Critic 초기화
+- `select_action()`: z ~ N(0,I) 샘플링 후 transport map 적용
+- `train()`: Critic (TD3), Actor (W2 penalty) 순차 학습
+
+### POGO_Refine 클래스  
+- `__init__()`: freeze_critic, copy_actor 파라미터 지원
+- `train()`: Sinkhorn 거리 사용, behavior policy 분리
+- `load()`: 체크포인트 로딩 (critic 고정 모드 고려)
+
+## 성능 최적화
+- **GPU 활용**: CUDA 텐서 연산 최대화
+- **배치 처리**: ReplayBuffer 효율적 샘플링
+- **메모리 관리**: Geomloss Sinkhorn 거리 계산 최적화
+- **벡터화**: NumPy/PyTorch 벡터 연산 우선 사용
+
+## 실험 및 검증
+- **Two-phase 학습**: Single-step → Two-step 순차 실행
+- **체크포인트 관리**: midpoint 저장, two_step_only 모드 지원
+- **메트릭 로깅**: critic_loss, actor_loss, lambda, Q_mean, w2_distance
+- **D4RL 평가**: 정규화된 점수로 성능 측정
+
+## 수학적 정확성
+- **Transport Map**: z와 state concatenation 정확히 구현
+- **W2 Distance**: Deterministic case에서 L2 거리 = W2 거리
+- **Sinkhorn**: Geomloss 라이브러리로 정확한 근사 계산
+- **Lambda 계산**: Q값 크기 기반 적응적 정규화
+
+## 실험 설계
+- **환경**: D4RL 벤치마크 (hopper, halfcheetah, walker2d, antmaze)
+- **파라미터**: alpha, w2_weight, freeze_critic_mode 등 실험적 조정
+- **시드**: 재현 가능한 실험을 위한 시드 고정
+- **평가**: 다중 에피소드 평균으로 안정적 성능 측정
+
+## 코드 품질
+- **예외 처리**: CUDA 메모리 부족, 파일 로딩 실패 등
+- **타입 힌트**: PyTorch 텐서 타입 명시
+- **로깅**: 단계별 학습 진행상황 명확한 출력
+- **문서화**: 수학적 배경과 구현 세부사항 상세 기록

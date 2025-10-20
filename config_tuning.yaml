@@ -1,0 +1,19 @@
+# POGO w2_weight 튜닝 전용 설정 파일
+
+common:
+  max_timesteps: 1000000
+  eval_freq: 10000
+  seeds: [0, 1]
+  learning_rate: 3e-4
+
+# 튜닝할 환경들 (워커만)
+environments:
+  walker2d-medium-v2:
+    learning_rate: 3e-4
+  walker2d-medium-replay-v2:
+    learning_rate: 3e-4
+  walker2d-medium-expert-v2:
+    learning_rate: 3e-4
+
+# 기본 w2_weight 값들 (명령행에서 오버라이드 가능)
+default_w2_weights: [0.2, 0.5, 1.0]

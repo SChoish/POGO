@@ -25,6 +25,9 @@ MANIFEST
 *.pth
 *.pt
 
+# NumPy
+*.npy
+
 # Jupyter Notebook
 .ipynb_checkpoints
 

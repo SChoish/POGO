@@ -1,279 +1,62 @@
-# POGO NatGrad Configuration for All D4RL Environments
-# 사용자가 weight 값들을 수정하여 사용
+# POGO 실험 설정 파일
+# 원스텝에서 w2_weight 튜닝을 위한 설정
 
-# =============================================================================
-# 공통 설정
-# =============================================================================
 common:
-  # 기본 실험 설정
   max_timesteps: 1000000
   eval_freq: 10000
-  eval_episodes: 10
-  final_eval_runs: 5
-  final_eval_episodes: 10
-  
-  # NatGrad 관련 설정
-  use_natgrad: true
-  natgrad_lr: 3e-4  # 기본값, 환경별로 오버라이드됨
-  natgrad_momentum: 0.9
-  
-  # 로깅 및 저장
-  save_model: true
-  normalize: true
-  wandb: false
-  
-  # Two-step 설정
-  split_ratio: 0.5
-  
-  # 시드 설정
   seeds: [0, 1, 2, 3, 4]
+  split_ratio: 0.5
 
-# =============================================================================
-# 환경별 설정
-# =============================================================================
 environments:
-  
-  # =============================================================================
-  # Hopper 환경들
-  # =============================================================================
   hopper:
     medium:
       w2_weight: 0.2
-      entropy_weight: 1e-5
       learning_rate: 3e-4
-      description: "Hopper medium dataset"
-      
     medium-replay:
-      w2_weight: 0.1
-      entropy_weight: 1e-5
+      w2_weight: 0.2
       learning_rate: 3e-4
-      description: "Hopper medium-replay dataset"
-      
     medium-expert:
-      w2_weight: 0.5
-      entropy_weight: 1e-5
+      w2_weight: 0.2
       learning_rate: 3e-4
-      description: "Hopper medium-expert dataset"
-      
-
-  # =============================================================================
-  # HalfCheetah 환경들
-  # =============================================================================
+  
   halfcheetah:
     medium:
-      w2_weight: 0.05
-      entropy_weight: 5e-3
+      w2_weight: 0.2
       learning_rate: 3e-4
-      description: "HalfCheetah medium dataset"
-      
     medium-replay:
-      w2_weight: 0.06
-      entropy_weight: 1e-5
+      w2_weight: 0.2
       learning_rate: 3e-4
-      description: "HalfCheetah medium-replay dataset"
-      
     medium-expert:
-      w2_weight: 0.5
-      entropy_weight: 1e-5
+      w2_weight: 0.2
       learning_rate: 3e-4
-      description: "HalfCheetah medium-expert dataset"
-      
-
-  # =============================================================================
-  # Walker2d 환경들
-  # =============================================================================
+  
   walker2d:
     medium:
-      w2_weight: 0.3
-      entropy_weight: 5e-3
+      w2_weight: 0.2
       learning_rate: 3e-4
-      description: "Walker2d medium dataset"
-      
     medium-replay:
       w2_weight: 0.2
-      entropy_weight: 1e-3
       learning_rate: 3e-4
-      description: "Walker2d medium-replay dataset"
-      
     medium-expert:
-      w2_weight: 0.3
-      entropy_weight: 1e-2
+      w2_weight: 0.2
       learning_rate: 3e-4
-      description: "Walker2d medium-expert dataset"
-      
-
-  # =============================================================================
-  # AntMaze 환경들
-  # =============================================================================
+  
   antmaze:
     umaze-v2:
-      w2_weight: 0.9
-      entropy_weight: 0.0
+      w2_weight: 0.2
       learning_rate: 1e-4
-      description: "AntMaze umaze-v2 dataset"
-      
     umaze-diverse-v2:
-      w2_weight: 0.5
-      entropy_weight: 1e-3
+      w2_weight: 0.2
       learning_rate: 1e-4
-      description: "AntMaze umaze-diverse-v2 dataset"
-      
     medium-play-v2:
       w2_weight: 0.2
-      entropy_weight: 3e-3
       learning_rate: 1e-4
-      description: "AntMaze medium-play-v2 dataset"
-      
     medium-diverse-v2:
-      w2_weight: 0.06
-      entropy_weight: 1e-3
+      w2_weight: 0.2
       learning_rate: 1e-4
-      description: "AntMaze medium-diverse-v2 dataset"
-      
     large-play-v2:
-      w2_weight: 0.1
-      entropy_weight: 6e-3
+      w2_weight: 0.2
       learning_rate: 1e-4
-      description: "AntMaze large-play-v2 dataset"
-      
     large-diverse-v2:
-      w2_weight: 0.06
-      entropy_weight: 1e-4
+      w2_weight: 0.2
       learning_rate: 1e-4
-      description: "AntMaze large-diverse-v2 dataset"
-
-# =============================================================================
-# NatGrad 특화 설정
-# =============================================================================
-natgrad:
-  # Natural Gradient Descent 파라미터
-  fisher_regularization: 1e-3
-  kl_constraint: 0.01
-  conjugate_gradient_steps: 10
-  damping: 1e-3
-  
-  # Trust Region 설정
-  trust_region_radius: 0.01
-  max_kl_divergence: 0.01
-  
-  # Fisher Information Matrix 설정
-  fisher_samples: 1000
-  fisher_batch_size: 256
-  
-  # Preconditioning 설정
-  use_preconditioning: true
-  preconditioning_type: "fisher"  # "fisher", "adam", "rmsprop"
-  
-  # Adaptive 설정
-  adaptive_kl: true
-  adaptive_lr: true
-  kl_target: 0.01
-  lr_decay: 0.99
-
-# =============================================================================
-# 실험 실행 설정
-# =============================================================================
-execution:
-  # 병렬 실행 설정
-  max_parallel: 2
-  threads_per_run: 4
-  
-  # 프로세스 우선순위
-  niceness: 5
-  
-  # 타임아웃 설정
-  timeout_minutes: 720  # 12시간
-  
-  # 재시도 설정
-  max_retries: 2
-  retry_wait_seconds: 60
-  
-  # 로그 설정
-  log_level: "INFO"
-  save_individual_logs: true
-  log_interval: 1000
-
-# =============================================================================
-# 결과 분석 설정
-# =============================================================================
-analysis:
-  # 결과 저장 경로
-  results_dir: "./results"
-  logs_dir: "./logs"
-  models_dir: "./models"
-  
-  # CSV 출력 설정
-  save_csv: true
-  csv_columns: ["timestep", "mean_reward", "std_reward", "d4rl_score", "phase"]
-  
-  # 통계 분석
-  compute_statistics: true
-  confidence_interval: 0.95
-  
-  # 시각화 설정
-  generate_plots: true
-  plot_types: ["learning_curve", "comparison", "distribution"]
-
-# =============================================================================
-# 하이퍼파라미터 튜닝 가이드
-# =============================================================================
-tuning_guide:
-  w2_weight:
-    description: "Wasserstein-2 distance weight"
-    typical_range: [0.01, 1.0]
-    recommended_values: [0.1, 0.2, 0.5]
-    notes: "높을수록 더 강한 정규화, 환경에 따라 조정 필요"
-    
-  entropy_weight:
-    description: "Entropy regularization weight"
-    typical_range: [1e-6, 1e-3]
-    recommended_values: [1e-5, 1e-4, 1e-3]
-    notes: "높을수록 더 탐험적, 낮을수록 더 보수적"
-    
-  natgrad_lr:
-    description: "Natural gradient learning rate"
-    typical_range: [1e-4, 1e-2]
-    recommended_values: [0.001, 0.003, 0.01]
-    notes: "기본 SGD보다 보통 더 낮은 값 사용"
-    
-  fisher_regularization:
-    description: "Fisher matrix regularization"
-    typical_range: [1e-4, 1e-2]
-    recommended_values: [1e-3, 1e-2]
-    notes: "수치적 안정성을 위해 필요"
-
-# =============================================================================
-# 사용 예시
-# =============================================================================
-examples:
-  single_experiment: |
-    # 단일 실험 실행 예시
-    python main_two.py \
-      --env hopper-medium \
-      --seed 0 \
-      --w2_weight 0.1 \
-      --entropy_weight 1e-5 \
-      --max_timesteps 1000000 \
-      --eval_freq 10000 \
-      --save_model \
-      --two_step
-  
-  batch_experiment: |
-    # 배치 실험 실행 예시 (pogo_tuning.py 사용)
-    python pogo_tuning.py \
-      --params-file params.txt \
-      --seeds 0 1 2 3 4 \
-      --parallel 2 \
-      --threads-per-run 4 \
-      --niceness 5
-  
-  config_usage: |
-    # config.yaml 사용 예시
-    import yaml
-    with open('config.yaml', 'r') as f:
-        config = yaml.safe_load(f)
-    
-    # 환경별 설정 가져오기
-    hopper_config = config['environments']['hopper']['medium']
-    w2_weight = hopper_config['w2_weight']
-    entropy_weight = hopper_config['entropy_weight']
