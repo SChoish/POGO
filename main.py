@@ -5,6 +5,7 @@ POGO: Single-step / Two-step 실행 메인 (단순화)
 """
 
 import os
+import json
 import argparse
 import numpy as np
 import torch
@@ -145,49 +146,90 @@ def final_evaluation(policy, env_name, seed, mean, std, runs=5, episodes=10):
 # ---------------------------
 # 체크포인트 유틸
 # ---------------------------
-def save_checkpoint(agent, ckpt_dir: str, prefix: str):
+def save_checkpoint(agent, ckpt_dir: str, prefix: str, step: int, phase: str, extra_meta=None):
     os.makedirs(ckpt_dir, exist_ok=True)
     path = os.path.join(ckpt_dir, prefix)
     agent.save(path)
-    print(f"[CKPT] Saved: {path}_*")
+    meta = {
+        "step": int(step),
+        "phase": phase,
+        "total_it": int(getattr(agent, "total_it", step)),
+        "checkpoint_name": prefix,
+    }
+    if extra_meta:
+        meta.update(extra_meta)
+    with open(path + "_meta.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+    print(f"[CKPT] Saved: {path}_* (step={step}, phase={phase})")
 
 
 def load_checkpoint_into_AgentA(agentA, load_prefix: str):
     print(f"[LOAD] Loading checkpoint from: {load_prefix}")
     agentA.load(load_prefix)
-    print(f"[LOAD] Done.")
+    meta_path = load_prefix + "_meta.json"
+    metadata = {}
+    if os.path.exists(meta_path):
+        with open(meta_path, "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        total_it = metadata.get("total_it")
+        if total_it is None:
+            total_it = metadata.get("step", 0)
+        if total_it is not None:
+            agentA.total_it = int(total_it)
+        print(f"[LOAD] Done. (step={metadata.get('step', 'unknown')}, phase={metadata.get('phase', 'unknown')})")
+    else:
+        print("[LOAD] Metadata not found alongside checkpoint. Assuming fresh start from weights only.")
+    return metadata
 
 
 # ---------------------------
 # Phase-1 (POGO)
 # ---------------------------
 def train_phase1(agentA, env_name, seed, replay_buffer, mean, std,
-                 max_steps, eval_freq, save_model, file_name, ckpt_dir, split_ratio):
+                 max_steps, eval_freq, save_model, file_name, ckpt_dir,
+                 split_ratio, start_step=0):
     eval_env = make_env(env_name, seed + 1234)
     best_eval = -np.inf
-    evaluations = []
+    eval_file = f"./results/{file_name}.npy"
+    if start_step > 0 and os.path.exists(eval_file):
+        evaluations = list(np.load(eval_file))
+    else:
+        evaluations = []
 
     split_step = int(round(max_steps * split_ratio))
-    midpoint_saved = False
+    midpoint_saved = start_step >= split_step
 
-    print(f"🚀 Phase-1 시작: 0 ~ {split_step-1} steps (POGO)")
-    for t in range(split_step):
+    print(f"🚀 Phase-1 시작: {start_step} ~ {split_step-1} steps (POGO)")
+    for global_step in range(start_step, split_step):
         metrics = agentA.train(replay_buffer, batch_size=256)
 
-        if (t + 1) % eval_freq == 0:
-            print(f"[Phase-1] Time steps: {t+1}")
+        if (global_step + 1) % eval_freq == 0:
+            print(f"[Phase-1] Time steps: {global_step + 1}")
             d4rl_score = eval_policy(agentA, eval_env, mean, std, base_seed=100, eval_episodes=10, deterministic=True)
             evaluations.append(d4rl_score)
-            np.save(f"./results/{file_name}", evaluations)
+            np.save(eval_file, evaluations)
             if save_model:
                 agentA.save(f"./models/{file_name}")
                 if d4rl_score > best_eval:
                     best_eval = d4rl_score
                     agentA.save(f"./models/{file_name}_best")
 
-        if not midpoint_saved and (t + 1) == split_step:
-            mid_name = f"{file_name}_mid_{t+1}"
-            save_checkpoint(agentA, ckpt_dir, mid_name)
+        if not midpoint_saved and (global_step + 1) == split_step:
+            mid_name = f"{file_name}_mid_{global_step + 1}"
+            save_checkpoint(
+                agentA,
+                ckpt_dir,
+                mid_name,
+                step=global_step + 1,
+                phase="phase1",
+                extra_meta={
+                    "file_name": file_name,
+                    "max_timesteps": max_steps,
+                    "split_ratio": split_ratio,
+                    "env": env_name,
+                    "seed": seed,
+                },
+            )
             midpoint_saved = True
 
     return agentA  # 최종 상태 반환
@@ -225,7 +267,8 @@ def train_phase2(agentB, env_name, seed, replay_buffer, mean, std,
                  start_step, max_steps, eval_freq, save_model, file_name):
     eval_env = make_env(env_name, seed + 2345)
     best_eval = -np.inf
-    evaluations = list(np.load(f"./results/{file_name}.npy")) if os.path.exists(f"./results/{file_name}.npy") else []
+    eval_file = f"./results/{file_name}.npy"
+    evaluations = list(np.load(eval_file)) if os.path.exists(eval_file) else []
 
     remaining = max_steps - start_step
     if remaining <= 0:
@@ -241,7 +284,7 @@ def train_phase2(agentB, env_name, seed, replay_buffer, mean, std,
             print(f"[Phase-2] Time steps: {global_step + 1}")
             d4rl_score = eval_policy(agentB, eval_env, mean, std, base_seed=200, eval_episodes=10, deterministic=True)
             evaluations.append(d4rl_score)
-            np.save(f"./results/{file_name}", evaluations)
+            np.save(eval_file, evaluations)
             if save_model:
                 agentB.save(f"./models/{file_name}")
                 if d4rl_score > best_eval:
@@ -283,7 +326,20 @@ def parse_args():
     p.add_argument("--final_eval_episodes", type=int, default=10)
 
     # Two-step control
-    p.add_argument("--two_step", action="store_true")
+    step_mode = p.add_mutually_exclusive_group()
+    step_mode.add_argument(
+        "--two_step",
+        dest="two_step",
+        action="store_true",
+        help="Run Phase-1 + Phase-2 sequentially (default).",
+    )
+    step_mode.add_argument(
+        "--one_step_only",
+        dest="two_step",
+        action="store_false",
+        help="Run only Phase-1 without launching Phase-2.",
+    )
+    p.set_defaults(two_step=True)
     p.add_argument("--split_ratio", type=float, default=0.5)
     p.add_argument("--freeze_critic_mode", default=True, type=bool)
     p.add_argument("--checkpoint_dir", type=str, default="./logs/checkpoints")
@@ -299,10 +355,11 @@ def parse_args():
 def main():
     args = parse_args()
 
-    # 파일 이름
+    # 파일 이름 기본값 (resume 시 덮어쓰기)
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"POGO_{args.env}_{args.seed}_{timestamp}"
+    default_file_name = f"POGO_{args.env}_{args.seed}_{timestamp}"
+    file_name = default_file_name
     os.makedirs("./results", exist_ok=True)
     if args.save_model:
         os.makedirs("./models", exist_ok=True)
@@ -335,25 +392,64 @@ def main():
     )
 
     # 로드 옵션
+    resume_metadata = None
     if args.start_mode in ["load", "two_step_only"] and args.load_prefix:
-        load_checkpoint_into_AgentA(agentA, args.load_prefix)
+        resume_metadata = load_checkpoint_into_AgentA(agentA, args.load_prefix)
     elif args.load_model:
         policy_file = file_name if args.load_model == "default" else args.load_model
         agentA.load(f"./models/{policy_file}")
+    else:
+        resume_metadata = {}
+
+    if resume_metadata is None:
+        resume_metadata = {}
+
+    if resume_metadata:
+        loaded_name = resume_metadata.get("file_name")
+        if loaded_name:
+            file_name = loaded_name
+
+    resume_step = int(resume_metadata.get("step", 0))
+    resume_phase = resume_metadata.get("phase")
 
     # 스케줄
     split_step = int(round(args.max_timesteps * args.split_ratio)) if args.two_step else args.max_timesteps
 
     # Phase-1
-    if args.start_mode in ["load", "two_step_only"]:
-        print("⏭️  Phase-1 스킵 (체크포인트 로드 모드)")
-        phase1_end = max(1, split_step)  # 다음 단계 시작 지점
+    phase1_ratio = args.split_ratio if args.two_step else 1.0
+
+    if args.start_mode == "two_step_only":
+        print("⏭️  Phase-1 스킵 (two_step_only 모드)")
+        phase1_end = resume_step if resume_step > 0 else split_step
+    elif args.start_mode == "load":
+        if resume_step <= 0 and not resume_phase:
+            print("⚠️  체크포인트 메타데이터가 없어 scratch와 동일하게 진행합니다.")
+            agentA = train_phase1(
+                agentA, args.env, args.seed, rb, mean, std,
+                max_steps=args.max_timesteps, eval_freq=args.eval_freq,
+                save_model=args.save_model, file_name=file_name,
+                ckpt_dir=args.checkpoint_dir, split_ratio=phase1_ratio,
+            )
+            phase1_end = split_step
+        elif resume_phase in (None, "phase1") and resume_step < split_step:
+            print(f"🔁 Phase-1 재개: step {resume_step} → {split_step}")
+            agentA = train_phase1(
+                agentA, args.env, args.seed, rb, mean, std,
+                max_steps=args.max_timesteps, eval_freq=args.eval_freq,
+                save_model=args.save_model, file_name=file_name,
+                ckpt_dir=args.checkpoint_dir, split_ratio=phase1_ratio,
+                start_step=resume_step,
+            )
+            phase1_end = split_step
+        else:
+            print("⏭️  Phase-1 스킵 (체크포인트에서 이미 완료)")
+            phase1_end = max(resume_step, split_step)
     else:
         agentA = train_phase1(
             agentA, args.env, args.seed, rb, mean, std,
             max_steps=args.max_timesteps, eval_freq=args.eval_freq,
             save_model=args.save_model, file_name=file_name,
-            ckpt_dir=args.checkpoint_dir, split_ratio=args.split_ratio
+            ckpt_dir=args.checkpoint_dir, split_ratio=phase1_ratio,
         )
         phase1_end = split_step
 
