@@ -222,11 +222,12 @@ class POGO:
         torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
 
     def load(self, filename):
-        self.critic.load_state_dict(torch.load(filename + "_critic"))
-        self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer"))
+        map_location = device
+        self.critic.load_state_dict(torch.load(filename + "_critic", map_location=map_location))
+        self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer", map_location=map_location))
         self.critic_target = copy.deepcopy(self.critic)
-        self.actor.load_state_dict(torch.load(filename + "_actor"))
-        self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
+        self.actor.load_state_dict(torch.load(filename + "_actor", map_location=map_location))
+        self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer", map_location=map_location))
         self.actor_target = copy.deepcopy(self.actor)
 
 class POGO_Refine:
@@ -369,15 +370,16 @@ class POGO_Refine:
         torch.save(self.actor_optimizer.state_dict(), filename + "_actor_optimizer")
 
     def load(self, filename):
-        self.critic.load_state_dict(torch.load(filename + "_critic"))
+        map_location = device
+        self.critic.load_state_dict(torch.load(filename + "_critic", map_location=map_location))
         if not self.freeze_critic:
             # If not freeze_critic, load the networks used for critic training
-            self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer"))
+            self.critic_optimizer.load_state_dict(torch.load(filename + "_critic_optimizer", map_location=map_location))
             if self.copy_actor:
-                self.actor_target.load_state_dict(torch.load(filename + "_actor"))
-                self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
+                self.actor_target.load_state_dict(torch.load(filename + "_actor", map_location=map_location))
+                self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer", map_location=map_location))
         self.critic_target = copy.deepcopy(self.critic)
-        self.behavior_policy.load_state_dict(torch.load(filename + "_actor"))
+        self.behavior_policy.load_state_dict(torch.load(filename + "_actor", map_location=map_location))
         if self.copy_actor:
-            self.actor.load_state_dict(torch.load(filename + "_actor"))
-            self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer"))
+            self.actor.load_state_dict(torch.load(filename + "_actor", map_location=map_location))
+            self.actor_optimizer.load_state_dict(torch.load(filename + "_actor_optimizer", map_location=map_location))
