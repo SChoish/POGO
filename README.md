@@ -4,6 +4,8 @@ POGO는 gradient flow 기반의 오프라인 강화학습 정책 최적화 프�
 
 > **연구 계보:** POGO는 [MPI](https://github.com/SChoish/MPI)의 전신 연구입니다. 이 저장소는 transport-map actor와 JKO/Sinkhorn 기반 multi-step policy flow를 탐색한 초기 구현이며, 후속 연구인 MPI는 이를 표준 behavior-regularized actor update에 적용되는 re-centered proximal framework로 정식화하고 여러 policy geometry와 base algorithm으로 확장합니다.
 
+**연구 기여자:** [Soohyun Choi](https://github.com/SChoish), [Seonvin Cho](https://github.com/seonvin0319)
+
 ## 주요 특징
 
 - **Transport Map Architecture**: Actor가 `z ~ N(0,I)`에서 행동 공간으로의 transport map을 근사
